@@ -155,6 +155,14 @@ public class Link{
     }
 
     /**
+     * Returns the current angle of the link
+     * @return
+     */
+    public double getTheta(){
+        return q[2];
+    }
+
+    /**
      * Performs rotates the provided matrix using the rotation matrix with the link
      * q angle
      *
