@@ -137,7 +137,7 @@ public class Constraint {
     public ArrayList<Double> MakePhi(Linkage linkage, ArrayList<Double> phi) {
         // Check that phi is valid
         if (phi == null) {
-            throw new NullPointerException();
+            throw new NullPointerException("Phi Vector is null");
         }
 
         // Instantiate useful variables
@@ -226,18 +226,45 @@ public class Constraint {
                 return phi;
 
             default:
-                throw new UnsupportedOperationException();
+                throw new UnsupportedOperationException("Not a valid constraint");
         }
     }
 
+    /**
+     * Defines the Jacobian Matrix for the given linkage
+     *
+     * TODO: Handle UnsupportedOperationException
+     * TODO: Handle NullPointerException
+     *
+     * @param linkage - The linkage being analyzed
+     * @param jac - The Jacobian matrix we are building
+     * @return
+     */
     public ArrayList<ArrayList<Double>> MakeJac(Linkage linkage, ArrayList<ArrayList<Double>> jac){
+        if(jac == null){
+            throw new NullPointerException("Jacobian Matrix is null");
+        }
         Link link1 = linkage.getLink(this.link1);
         Link link2 = linkage.getLink(this.link2);
+
+        double[][] linkP;
+        double[][] linkQ;
+
+        double[] tP;
+        double[] tQ;
+        double[] rP;
+        double[] rQ;
 
         ArrayList<Integer> cols1 = new ArrayList<Integer>();
         ArrayList<Integer> cols2 = new ArrayList<Integer>();
 
-        int dof = linkage.numLinks()*3;
+        int dof = linkage.numLinks();
+        int n = jac.size();
+        int c1 = 0;
+        int c2 = 0;
+
+        ArrayList[] j;
+        ArrayList<Double> jacobian;
 
         for (int i = 0; i < 3; i++){
             cols1.add(i, 3*(this.link1 - 1) + i);
@@ -248,32 +275,261 @@ public class Constraint {
 
             // Jacobian for Ground
             case "Gnd":
-                int n = jac.size();
 
-                ArrayList<Double>[] j = new ArrayList[3];
+                j = new ArrayList[3];
                 for (int m = 0; m < 3; m++){
                     j[m] = new ArrayList<Double>();
                 }
 
+                // Loop over the jacobian and add the correct values
                 for (int i = n; i < n+3; i++){
                     for(int k = 0; k < dof; k++){
-                        if(k % i == 0){
-                            j[i].add(1.0);
+                        if(k == i){
+                            j[i].add(cols1.get(i), 1.0);
                         }else{
-                            j[i].add(0.0);
+                            j[i].add(k, 0.0);
                         }
                     }
                 }
 
                 for (int p = 0; p < j.length; p++){
-                    jac.add(j[p]);
+                    jac.add(n, j[p]);
+                    n++;
                 }
 
                 return jac;
-            default:
-                throw new UnsupportedOperationException();
 
+            // Jacobian for PinPin
+            case "PinPin":
+                j = new ArrayList[2];
+                for (int m = 0; m < 2; m++){
+                    j[m] = new ArrayList<Double>();
+                }
+
+                tP = link1.LinkVector(pin1)[1];
+                tQ = link2.LinkVector(pin2)[1];
+
+                // Loop over the correct columns and add values to the Jacobian matrix
+                for (int i = 0; i < 2; i++){
+                    for (int k = 0; k < dof; k++){
+                        if(k == cols1.get(c1) && c1 < 2){
+                            j[i].add(k, 1.0);
+                            c1++;
+                        }else if(k == cols2.get(c2) && c2 < 2){
+                            j[i].add(k, -1.0);
+                            c2++;
+                        }else if(k == cols1.get(c1) && c1 == 2){
+                            j[i].add(k, tP[i]);
+                            c1++;
+                        }else if(k == cols2.get(c2) && c2 == 2){
+                            j[i].add(k, -tQ[i]);
+                        }else{
+                            j[i].add(k, 0.0);
+                            j[i].add(k, 0.0);
+                        }
+                    }
+                }
+
+                for (int p = 0; p < j.length; p++){
+                    jac.add(n, j[p]);
+                    n++;
+                }
+
+                return jac;
+
+            // Jacobian for DriveRot
+            case "DriveRot":
+                jacobian = new ArrayList<Double>();
+
+                // Loop over the correct columns and add values to the Jacobian matrix
+                    for (int k = 0; k < dof; k++){
+                        if(k == cols1.get(2)){
+                            jacobian.add(k, 1.0);
+                        }else if(k == cols2.get(2)){
+                            jacobian.add(k, -1.0);
+                        }else{
+                            jacobian.add(cols1.get(k), 0.0);
+                            jacobian.add(cols2.get(k), 0.0);
+                        }
+                    }
+
+                jac.add(n, jacobian);
+
+                return jac;
+
+            // Jacobian for PinSlot
+            case "PinSlot":
+                jacobian = new ArrayList<Double>();
+
+                linkP = link1.LinkVector(pin1);
+                linkQ = link2.SlotAngle(slot);
+
+                tP = linkP[1];
+                rP = linkP[2];
+                rQ = linkQ[0];
+                tQ = linkQ[1];
+
+                double[] v = linkQ[2];
+                double[] w = linkQ[3];
+
+                double[] u = new double[2];
+                u[0] = rP[0] - rQ[0];
+                u[1] = rP[1] - rQ[1];
+
+                double wtP = MatrixMultiply(w, tP);
+                double wtQ = MatrixMultiply(w, tQ);
+                double uv = MatrixMultiply(u, v);
+
+                // Loop over the correct columns and add values to the Jacobian matrix
+                    for (int k = 0; k < dof; k++){
+                        if(k == cols1.get(c1) && c1 < 2){
+                            jacobian.add(k, w[c1]);
+                            c1++;
+                        }else if(k == cols2.get(c2) && c2 < 2){
+                            jacobian.add(k, -w[c2]);
+                            c2++;
+                        }else if(k == cols1.get(c1) && c1 == 2){
+                            jacobian.add(k, wtP);
+                            c1++;
+                        }else if(k == cols2.get(c2) && c2 == 2){
+                            jacobian.add(k, -(wtQ+uv));
+                        }else{
+                            jacobian.add(k, 0.0);
+                            jacobian.add(k, 0.0);
+                        }
+                    }
+
+                jac.add(n, jacobian);
+
+                return jac;
+
+            // Jacobian for Gear
+            case "Gear":
+                jacobian = new ArrayList<Double>();
+
+                // Loop over the correct columns and add values to the Jacobian matrix
+                for (int k = 0; k < dof; k++){
+                    if(k == cols1.get(2)){
+                        jacobian.add(k, rho);
+                    }else if(k == cols2.get(2)){
+                        jacobian.add(k, 1.0);
+                    }else{
+                        jacobian.add(cols1.get(k), 0.0);
+                        jacobian.add(cols2.get(k), 0.0);
+                    }
+                }
+
+                jac.add(n, jacobian);
+
+                return jac;
+
+            // Jacobian for Planetary
+            case "Planetary":
+                jacobian = new ArrayList<Double>();
+
+                rP = link1.LinkVector(pin1)[2];
+                rQ = link2.LinkVector(pin2)[2];
+
+                double lambda = rhoP[0]*(offsetP[0] + link1.getTheta()) + rhoP[1]*(offsetP[1] + link2.getTheta() - Math.PI);
+                w = new double[]{-Math.sin(lambda), Math.cos(lambda)};
+                v = new double[]{Math.cos(lambda), Math.sin(lambda)};
+
+                double[] rQP = new double[]{rQ[0] - rP[0], rQ[1]-rP[1]};
+                double vrQP = MatrixMultiply(v, rQP);
+
+                // Loop over the correct columns and add values to the Jacobian matrix
+                for (int k = 0; k < dof; k++){
+                    if(k == cols1.get(c1) && c1 < 2){
+                        jacobian.add(k, w[c1]);
+                        c1++;
+                    }else if(k == cols2.get(c2) && c2 < 2){
+                        jacobian.add(k, -w[c2]);
+                        c2++;
+                    }else if(k == cols1.get(c1) && c1 == 2){
+                        jacobian.add(k, -vrQP*rhoP[0]);
+                        c1++;
+                    }else if(k == cols2.get(c2) && c2 == 2){
+                        jacobian.add(k, -vrQP*rhoP[1]);
+                    }else{
+                        jacobian.add(k, 0.0);
+                        jacobian.add(k, 0.0);
+                    }
+                }
+
+                jac.add(n, jacobian);
+
+                return jac;
+
+            default:
+                throw new UnsupportedOperationException("Not a valid constraint");
         }
+    }
+
+    /**
+     * Builds the nu vector for the entire linkage
+     *
+     * TODO: Handle NullPointerException
+     * TODO: Handle UnsupportedOperationException
+     *
+     * @param nu - nu vector passed into the method
+     * @return - A mutated nu vector
+     */
+    public ArrayList<Double> makeNu(ArrayList<Double> nu){
+        if(nu == null){
+            throw new NullPointerException("Nu vector is null");
+        }
+
+        int n = nu.size();
+
+        // Build the Nu vector for each constraint type
+        switch (type){
+            case "Gnd":
+                for(int i = n; i < n+3; i++){
+                    nu.add(i, 0.0);
+                }
+
+                return nu;
+            case "PinPin":
+                for(int i = n; i < n+2; i++){
+                    nu.add(i, 0.0);
+                }
+
+                return nu;
+            case "DriveRot":
+                nu.add(n, omega);
+                return nu;
+            case "PinSlot":
+            case "Gear":
+            case "Planetary":
+                nu.add(n, 0.0);
+                return nu;
+            default:
+                throw new UnsupportedOperationException("Not a valid constraint");
+        }
+    }
+
+    /**
+     * Performs matrix multiplication on the two provided vectors
+     *
+     * TODO: Handle IllegalArgumentException
+     *
+     * @param a - first vector in multiplication
+     * @param b - second vector in multiplication
+     * @return - result of Matrix multiplication
+     */
+    public double MatrixMultiply(double[] a, double[] b){
+        double result = 0.0;
+        double size = a.length;
+
+        if(a.length != b.length){
+            throw new IllegalArgumentException("The vectors do not have the correct dimensions for matrix multiplication");
+        }
+
+        for (int i = 0; i < size; i++){
+            result += a[i]*b[i];
+        }
+
+        return result;
     }
 
 }
