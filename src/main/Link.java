@@ -37,10 +37,11 @@ public class Link{
      * @param NB - number of external pins on the link
      * @param colors - colors used for plotting
      */
-    public Link(int[] x0, double theta, ArrayList<Double>[] pins, int NB, int[] colors){
+    public Link(double[] x0, double theta, ArrayList<Double>[] pins, int NB, int[] colors){
         this.q[0] = x0[0];
         this.q[1] = x0[1];
         this.q[2] = theta;
+        this.x0 = x0;
         this.pins = pins;
         this.NB = NB;
         this.colors = colors;
@@ -64,10 +65,11 @@ public class Link{
      * @param colors - colors used for plotting
      * @param slotPins - array of pins that are connected togeter using a slot
      */
-    public Link(int[] x0, double theta, ArrayList<Double>[] pins, int NB, int[] colors, ArrayList<int[]> slotPins){
+    public Link(double[] x0, double theta, ArrayList<Double>[] pins, int NB, int[] colors, ArrayList<int[]> slotPins){
         this.q[0] = x0[0];
         this.q[1] = x0[1];
         this.q[2] = theta;
+        this.x0 = x0;
         this.pins = pins;
         this.NB = NB;
         this.colors = colors;
@@ -160,6 +162,71 @@ public class Link{
      */
     public double getTheta(){
         return q[2];
+    }
+
+    /**
+     * Returns the x-, y- coordinates of the desired pin
+     *
+     * @param pin - the pin you want the coordinates of
+     * @return
+     */
+    public double[] getPin(int pin){ return new double[]{pins[0].get(pin), pins[1].get(pin)};}
+
+    /**
+     * Returns the local origin of the link
+     * @return
+     */
+    public double[] getOrigin(){ return new double[]{x0[0], x0[1]}; }
+
+    /**
+     * Returns the q vector of the link
+     *
+     * @return
+     */
+    public double[] getQ(){return q;}
+
+    /**
+     * Returns the colors used for plotting the link
+     * @return
+     */
+    public int[] getColors(){ return colors;}
+
+    /**
+     * Returns the list of slotPins of the link
+     * @return
+     */
+    public ArrayList<int[]> getSlotPins(){ return slotPins; }
+
+    /**
+     * Returns the mass of the link in kg
+     * @return
+     */
+    public double getMass(){return m;}
+
+    /**
+     * Returns the force acting on the link in N
+     * @return
+     */
+    public double[] getF(){return F;}
+
+    /**
+     * Returns the inertia of the link about its center of mass in kg*m^2
+     * @return
+     */
+    public double getInertia(){return I;}
+
+    /**
+     * Returns the pin the force is acting on
+     * @return
+     */
+    public int getFpin(){return Fpin;}
+
+    /**
+     * Sets the q vector of the link to the provided q vector
+     * @param newQ - new q vector of the link
+     */
+    public void setQ(double[] newQ){
+        q = newQ;
     }
 
     /**

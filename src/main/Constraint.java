@@ -134,10 +134,14 @@ public class Constraint {
      * @param phi - partially completed Phi vector
      * @return - a more complete phi vector
      */
-    public ArrayList<Double> MakePhi(Linkage linkage, ArrayList<Double> phi) {
+    public ArrayList<Double> makePhi(Linkage linkage, ArrayList<Double> phi) {
         // Check that phi is valid
         if (phi == null) {
             throw new NullPointerException("Phi Vector is null");
+        }
+
+        if(linkage == null){
+            throw new NullPointerException("Linkage is undefined");
         }
 
         // Instantiate useful variables
@@ -240,10 +244,15 @@ public class Constraint {
      * @param jac - The Jacobian matrix we are building
      * @return
      */
-    public ArrayList<ArrayList<Double>> MakeJac(Linkage linkage, ArrayList<ArrayList<Double>> jac){
+    public ArrayList<ArrayList<Double>> makeJac(Linkage linkage, ArrayList<ArrayList<Double>> jac){
         if(jac == null){
             throw new NullPointerException("Jacobian Matrix is null");
         }
+
+        if(linkage == null){
+            throw new NullPointerException("Linkage is undefined");
+        }
+
         Link link1 = linkage.getLink(this.link1);
         Link link2 = linkage.getLink(this.link2);
 
@@ -258,7 +267,7 @@ public class Constraint {
         ArrayList<Integer> cols1 = new ArrayList<Integer>();
         ArrayList<Integer> cols2 = new ArrayList<Integer>();
 
-        int dof = linkage.numLinks();
+        int dof = 3*linkage.numLinks();
         int n = jac.size();
         int c1 = 0;
         int c2 = 0;
@@ -470,6 +479,7 @@ public class Constraint {
      *
      * TODO: Handle NullPointerException
      * TODO: Handle UnsupportedOperationException
+     * TODO: Figure out if I want to build constraints by using a 1-based approach or 0-based approach for accessing links and pins
      *
      * @param nu - nu vector passed into the method
      * @return - A mutated nu vector
@@ -505,6 +515,118 @@ public class Constraint {
                 return nu;
             default:
                 throw new UnsupportedOperationException("Not a valid constraint");
+        }
+    }
+
+    /**
+     * Builds the gamma vector for the entire linkage
+     *
+     * TODO: Handle UnsupportedOperationException
+     * TODO: Handle NullPointer Exception
+     *
+     * @param gamma - gamma vector to be mutated
+     * @param qdot - linkage vectoring containing all the link velocities
+     * @param linkage - linkage we are analyzing
+     * @return - a mutated gamma vector
+     */
+    public ArrayList<Double> makeGamma(ArrayList<Double> gamma, double[] qdot, Linkage linkage){
+        if(gamma == null){
+            throw new NullPointerException("Gamma vector undefined");
+        }
+
+        if(linkage == null){
+            throw new NullPointerException("Linkage is undefined");
+        }
+
+        Link linkP;
+        Link linkQ;
+
+        double[] v;
+        double[] rdot1;
+        double[] rdot2;
+        double[] rdotDiff;
+
+        double tdot1;
+        double tdot2;
+        double newGammaVal;
+
+        int n = gamma.size();
+
+        switch (type){
+            case "Gnd":
+                for (int i = n; i < n+3; i++){
+                    gamma.add(i, 0.0);
+                }
+
+                return gamma;
+
+            case "PinPin":
+                linkP = linkage.getLink(link1);
+                linkQ = linkage.getLink(link2);
+
+                double[] sP = linkP.LinkVector(pin1)[0];
+                double[] sQ = linkQ.LinkVector(pin2)[0];
+
+                double qdot1 = qdot[3*link1 + 2]; // For a 0-based indexing approach
+                double qdot2 = qdot[3*link2 + 2]; // For a 0-based indexing approach
+
+                for (int i = n; i < n+2; i++){
+                    gamma.add(i, sP[i-n]*Math.pow(qdot1, 2) - sQ[i-n]*Math.pow(qdot2, 2));
+                }
+
+                return gamma;
+
+            case "DriveRot":
+                gamma.add(n, 0.0);
+                return gamma;
+
+            case "PinSlot":
+                linkP = linkage.getLink(link1);
+                linkQ = linkage.getLink(link2);
+
+                double[] tP = linkP.LinkVector(pin1)[1];
+
+                double[][] slotAngleQ = linkQ.SlotAngle(slot);
+                v = slotAngleQ[2];
+                double[] w = slotAngleQ[3];
+
+                rdot1 = new double[]{qdot[3*link1], qdot[3*link1+1]};
+                rdot2 = new double[]{qdot[3*link2], qdot[3*link2+1]};
+                tdot1 = qdot[3*link1+2]; // 0-based indexing approach
+                tdot2 = qdot[3*link2+2]; // 0-based indexing approach
+
+                rdotDiff = new double[]{rdot1[0] - rdot2[0], rdot1[1] - rdot2[1]};
+
+                double[] qP = linkP.getQ();
+                double[] qQ = linkQ.getQ();
+                double[] originDiff = new double[]{qP[0]-qQ[0], qP[1]-qQ[1]};
+
+                newGammaVal = 2*tdot2*MatrixMultiply(v, rdotDiff) - MatrixMultiply(v, tP)*Math.pow(tdot1-tdot2, 2) + Math.pow(tdot2, 2)*MatrixMultiply(w, originDiff);
+
+                gamma.add(n, newGammaVal);
+                return gamma;
+
+            case "Planetary":
+                linkP = linkage.getLink(link1);
+                linkQ = linkage.getLink(link2);
+
+                double lambda = rhoP[0]*(offsetP[0] + linkP.getTheta()) + rhoP[1]*(offsetP[1] + linkQ.getTheta() - Math.PI);
+
+                rdot1 = new double[]{qdot[3*link1], qdot[3*link1+1]};
+                rdot2 = new double[]{qdot[3*link2], qdot[3*link2+1]};
+                tdot1 = qdot[3*link1+2]; // 0-based indexing approach
+                tdot2 = qdot[3*link2+2]; // 0-based indexing approach
+
+                rdotDiff = new double[]{rdot1[0] - rdot2[0], rdot1[1] - rdot2[1]};
+
+                v = new double[]{Math.cos(lambda), -Math.sin(lambda)};
+
+                newGammaVal = -2*MatrixMultiply(v, rdotDiff)*(tdot1*rhoP[0] + tdot2*rhoP[1]);
+                gamma.add(n, newGammaVal);
+                return gamma;
+
+            default:
+                throw new UnsupportedOperationException("Gamma cannot be calculated for this constraint");
         }
     }
 
